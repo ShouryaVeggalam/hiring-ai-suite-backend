@@ -16,11 +16,14 @@ services:
     rootDir: backend
     region: oregon
     branch: main
-    buildCommand: npm install && npm run build
+    # NODE_ENV=production is set below; without --include=dev, prisma/tsc are not installed.
+    buildCommand: npm install --include=dev && npm run build
     startCommand: npm run start:render
     healthCheckPath: /api/v1/health
     autoDeploy: true
     envVars:
+      - key: NODE_VERSION
+        value: "20"
       - key: NODE_ENV
         value: production
       - key: PORT
@@ -64,7 +67,7 @@ services:
       - key: UPLOAD_MAX_BYTES
         value: "10485760"
       - key: UPLOAD_ALLOWED_MIME
-        value: application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document
+        value: "application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
       - key: VIRUS_SCAN_ENABLED
         value: "false"
       - key: QUEUE_PREFIX
@@ -80,7 +83,7 @@ services:
       - key: EMAIL_PROVIDER
         value: console
       - key: EMAIL_FROM
-        value: Hiring AI Suite <no-reply@example.com>
+        value: "Hiring AI Suite <no-reply@example.com>"
       - key: METRICS_ENABLED
         value: "true"
       - key: SWAGGER_ENABLED
