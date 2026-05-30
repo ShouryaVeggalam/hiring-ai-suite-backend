@@ -6,6 +6,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { getConfig } from '../config';
+import { getLogger } from '../config/logger';
 import type { IStorage, StoredObject, UploadParams } from './IStorage';
 
 export class S3Storage implements IStorage {
@@ -14,20 +15,46 @@ export class S3Storage implements IStorage {
 
   constructor() {
     const config = getConfig();
+    const logger = getLogger();
     this.bucket = config.S3_BUCKET;
+
+    // Fail fast if credentials are missing — otherwise the AWS SDK falls back
+    // to the default credential chain (env vars → AWS config → IMDS), and the
+    // IMDS lookup hangs for ~120s on hosts without an instance metadata
+    // service (Render, Vercel, etc.). That manifests as silently stuck
+    // uploads with no error in the API logs.
+    if (!config.S3_ACCESS_KEY_ID || !config.S3_SECRET_ACCESS_KEY) {
+      throw new Error(
+        'S3 storage driver selected but S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY are not set. ' +
+          'Either set both env vars or switch STORAGE_DRIVER=local.',
+      );
+    }
+    if (!config.S3_ENDPOINT) {
+      logger.warn(
+        'S3_ENDPOINT is empty — defaulting to AWS S3. For Cloudflare R2 / MinIO, set S3_ENDPOINT.',
+      );
+    }
 
     this.client = new S3Client({
       region: config.S3_REGION,
       endpoint: config.S3_ENDPOINT || undefined,
       forcePathStyle: config.S3_FORCE_PATH_STYLE,
-      credentials:
-        config.S3_ACCESS_KEY_ID && config.S3_SECRET_ACCESS_KEY
-          ? {
-              accessKeyId: config.S3_ACCESS_KEY_ID,
-              secretAccessKey: config.S3_SECRET_ACCESS_KEY,
-            }
-          : undefined,
+      credentials: {
+        accessKeyId: config.S3_ACCESS_KEY_ID,
+        secretAccessKey: config.S3_SECRET_ACCESS_KEY,
+      },
+      maxAttempts: 3,
     });
+
+    logger.info(
+      {
+        endpoint: config.S3_ENDPOINT || 'aws-default',
+        bucket: this.bucket,
+        region: config.S3_REGION,
+        forcePathStyle: config.S3_FORCE_PATH_STYLE,
+      },
+      'S3 storage client initialised',
+    );
   }
 
   async upload(params: UploadParams): Promise<StoredObject> {
