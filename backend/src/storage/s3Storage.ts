@@ -35,6 +35,9 @@ export class S3Storage implements IStorage {
       );
     }
 
+    // AWS SDK v3.729+ adds CRC32 checksum headers by default. Cloudflare R2 does
+    // not implement them yet, which causes PutObject to hang or return 501.
+    // https://community.cloudflare.com/t/aws-sdk-client-s3-v3-729-0-breaks-uploadpart-and-putobject-r2-s3-api-compatibility/758637
     this.client = new S3Client({
       region: config.S3_REGION,
       endpoint: config.S3_ENDPOINT || undefined,
@@ -44,6 +47,8 @@ export class S3Storage implements IStorage {
         secretAccessKey: config.S3_SECRET_ACCESS_KEY,
       },
       maxAttempts: 3,
+      requestChecksumCalculation: 'WHEN_REQUIRED',
+      responseChecksumValidation: 'WHEN_REQUIRED',
     });
 
     logger.info(
