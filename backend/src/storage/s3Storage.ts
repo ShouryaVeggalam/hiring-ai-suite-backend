@@ -63,16 +63,53 @@ export class S3Storage implements IStorage {
   }
 
   async upload(params: UploadParams): Promise<StoredObject> {
-    await this.client.send(
-      new PutObjectCommand({
-        Bucket: this.bucket,
-        Key: params.key,
-        Body: params.body,
-        ContentType: params.contentType,
-        Metadata: params.metadata,
-      }),
+    const logger = getLogger();
+    const sizeBytes = Buffer.isBuffer(params.body) ? params.body.length : undefined;
+    const started = Date.now();
+    logger.info(
+      { key: params.key, bucket: this.bucket, sizeBytes, contentType: params.contentType },
+      's3.upload start',
     );
-    return { key: params.key, bucket: this.bucket };
+
+    try {
+      // 25s ceiling so a stalled R2 call surfaces as an error instead of a
+      // multi-minute client hang. Default AWS SDK behaviour can be much longer.
+      const timeoutMs = 25_000;
+      const abort = new AbortController();
+      const timer = setTimeout(() => abort.abort(), timeoutMs);
+
+      try {
+        await this.client.send(
+          new PutObjectCommand({
+            Bucket: this.bucket,
+            Key: params.key,
+            Body: params.body,
+            ContentType: params.contentType,
+            Metadata: params.metadata,
+            ContentLength: sizeBytes,
+          }),
+          { abortSignal: abort.signal },
+        );
+      } finally {
+        clearTimeout(timer);
+      }
+
+      logger.info(
+        { key: params.key, ms: Date.now() - started },
+        's3.upload ok',
+      );
+      return { key: params.key, bucket: this.bucket };
+    } catch (err) {
+      logger.error(
+        {
+          key: params.key,
+          ms: Date.now() - started,
+          err: err instanceof Error ? { name: err.name, message: err.message } : err,
+        },
+        's3.upload failed',
+      );
+      throw err;
+    }
   }
 
   async download(key: string): Promise<Buffer> {
