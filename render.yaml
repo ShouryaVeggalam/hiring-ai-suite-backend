@@ -3,31 +3,10 @@
 # Deploys a single Web Service that runs both the HTTP API and the BullMQ
 # workers in one Node process (good for Render's free plan).
 #
-# DEFAULT PROFILE: local storage (no R2 needed)
-#   Resume / export files are written to Render's ephemeral disk and are
-#   lost on every restart or cold-wake from sleep. Good enough to validate
-#   the full flow; switch to S3-compatible storage (Cloudflare R2 / S3) for
-#   any real use.
+# Storage: Cloudflare R2 (S3-compatible). Set the S3_* secrets below.
 #
-# After importing this file via Render's Blueprint flow you must still set
-# the secret env vars listed under `envVars` (those marked sync:false) in the
-# Render dashboard:
-#   - DATABASE_URL              (Neon Postgres connection string)
-#   - REDIS_URL                 (Upstash Redis URL, rediss:// for TLS)
-#   - JWT_ACCESS_SECRET         (>= 32 random chars)
-#   - JWT_REFRESH_SECRET        (>= 32 random chars)
-#   - WEBHOOK_SIGNING_SECRET    (>= 32 random chars)
-#   - APP_URL                   (your https://...onrender.com URL)
-#   - CORS_ORIGINS              (your Vercel frontend URL)
-#
-# To upgrade to persistent storage later, change in the dashboard:
-#   STORAGE_DRIVER=s3
-#   S3_ENDPOINT=https://<accountid>.r2.cloudflarestorage.com
-#   S3_ACCESS_KEY_ID=...
-#   S3_SECRET_ACCESS_KEY=...
-#   S3_BUCKET=hiring-ai-suite-prod
-#   S3_REGION=auto
-# No redeploy required — Render restarts the service automatically.
+# After importing via Render Blueprint, fill in every env var marked sync:false
+# in the Render dashboard (see docs/DEPLOY.md for where to copy each value).
 
 services:
   - type: web
@@ -75,9 +54,7 @@ services:
       - key: AUTH_RATE_LIMIT_MAX
         value: "20"
       - key: STORAGE_DRIVER
-        value: local
-      - key: LOCAL_STORAGE_PATH
-        value: /tmp/uploads
+        value: s3
       - key: S3_REGION
         value: auto
       - key: S3_FORCE_PATH_STYLE
@@ -125,4 +102,12 @@ services:
       - key: WEBHOOK_SIGNING_SECRET
         sync: false
       - key: CORS_ORIGINS
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_BUCKET
         sync: false
