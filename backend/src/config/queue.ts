@@ -4,11 +4,22 @@ import { getConfig } from './index';
 export function getQueueConnection(): ConnectionOptions {
   const config = getConfig();
   const url = new URL(config.REDIS_URL);
+
+  // Honour rediss:// (Upstash, ElastiCache TLS, etc.) and the explicit REDIS_TLS
+  // override. Without this, BullMQ opens a plain TCP socket against a TLS-only
+  // host and ioredis silently retries forever (maxRetriesPerRequest: null),
+  // which makes any queue.add() call hang the request.
+  const isTls = url.protocol === 'rediss:' || config.REDIS_TLS;
+
   return {
     host: url.hostname,
     port: url.port ? Number(url.port) : 6379,
-    password: url.password || undefined,
+    username: url.username ? decodeURIComponent(url.username) : undefined,
+    password: url.password ? decodeURIComponent(url.password) : undefined,
+    tls: isTls ? { servername: url.hostname } : undefined,
     maxRetriesPerRequest: null,
+    enableReadyCheck: false,
+    connectTimeout: 15_000,
   };
 }
 
